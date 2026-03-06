@@ -20,8 +20,8 @@ variable "entity_name" {
   type        = string
 }
 
-variable "entity_name_fail" {
-  description = "Name of the Vault identity entity to test Sentinel enforcement. Set this as a workspace variable in TFC/TFE."
+variable "entity_id_fail" {
+  description = "ID of the Vault identity entity to test Sentinel enforcement. Set this as a workspace variable in TFC/TFE."
   type        = string
 }
 
