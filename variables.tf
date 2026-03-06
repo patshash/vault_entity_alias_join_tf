@@ -1,3 +1,20 @@
+variable "vault_address" {
+  description = "The URL of the Vault server (e.g. https://vault.example.com:8200)"
+  type        = string
+}
+
+variable "vault_token" {
+  description = "Vault authentication token"
+  type        = string
+  sensitive   = true
+}
+
+variable "vault_namespace" {
+  description = "The Vault namespace to target (e.g. 'admin/my-namespace'). Leave empty for root namespace."
+  type        = string
+  default     = null
+}
+
 variable "entity_name" {
   description = "Name of the Vault identity entity. Set this as a workspace variable in TFC/TFE so Sentinel can validate against it."
   type        = string

@@ -8,9 +8,9 @@ terraform {
 }
 
 provider "vault" {
-  # Configure via environment variables:
-  #   VAULT_ADDR  - Vault server URL
-  #   VAULT_TOKEN - Vault authentication token
+  address   = var.vault_address
+  token     = var.vault_token
+  namespace = var.vault_namespace
 }
 
 # 1. Create the entity in Vault using the workspace variable
