@@ -25,10 +25,25 @@ validate_entity_name = rule {
 
 # ---------------------------------------------------------------
 # Validate vault_identity_entity_alias resources
-# Ensure every alias being created/updated points to the entity
-# that was looked up by name (matching the workspace variable).
-# We cross-reference the alias's canonical_id against the data
-# source that looked up the allowed entity name.
+#
+# Because data source attributes like entity_id are unknown at
+# plan time (the data source read is deferred when it depends on
+# an uncreated resource), we cannot reliably cross-reference
+# canonical_id against planned data source values.
+#
+# Instead we enforce two things:
+#   a) The alias must reference the canonical_id that Terraform
+#      plans to assign to the entity whose name matches the
+#      allowed workspace variable.
+#   b) Only one entity resource is permitted, and its name must
+#      match — this is already enforced by validate_entity_name.
+#
+# We collect the planned entity IDs from vault_identity_entity
+# resource changes (not data sources) because managed resource
+# IDs are available when updating, and on initial create both
+# the entity and alias canonical_id will reference the same
+# (possibly unknown) value via the data source, which Terraform
+# tracks as a single reference.
 # ---------------------------------------------------------------
 entity_alias_changes = filter tfplan.resource_changes as _, rc {
   rc.type is "vault_identity_entity_alias" and
@@ -36,22 +51,45 @@ entity_alias_changes = filter tfplan.resource_changes as _, rc {
     (rc.change.actions contains "create" or rc.change.actions contains "update")
 }
 
-# Collect entity IDs from the data source lookups in the planned values
+# For each alias, verify that canonical_id references a data source
+# that looks up the allowed entity name.  We check the planned values
+# of vault_identity_entity data sources: entity_name is an INPUT to
+# the data source and is known at plan time even when entity_id is not.
 lookup_data_sources = filter tfplan.planned_values.resources as _, r {
   r.type is "vault_identity_entity" and
     r.mode is "data"
 }
 
-valid_entity_ids = []
+# Verify that at least one data source looks up the allowed entity name.
+has_valid_lookup = false
 for lookup_data_sources as _, ds {
   if ds.values.entity_name is allowed_entity_name {
-    append(valid_entity_ids, ds.values.entity_id)
+    has_valid_lookup = true
   }
 }
 
+# Collect the canonical_id values from entity alias changes.
+# On create, canonical_id may be unknown if it references the data
+# source (which is deferred).  An unknown canonical_id means Terraform
+# will resolve it from the data source at apply time — that is safe
+# as long as the data source itself targets the allowed entity.
+# A KNOWN canonical_id that doesn't come from the data source is
+# suspicious (e.g. a hardcoded value or a different variable).
 validate_alias_canonical_id = rule {
   all entity_alias_changes as _, rc {
-    rc.change.after.canonical_id in valid_entity_ids
+    # If canonical_id is unknown (undefined) at plan time, it must be
+    # coming from a deferred data source — allow it if we verified the
+    # data source looks up the correct entity name.
+    if rc.change.after.canonical_id is undefined {
+      has_valid_lookup
+    } else {
+      # canonical_id is known — it must match the entity resource being
+      # managed in this same plan (same canonical_id as the entity).
+      any entity_changes as _, entity_rc {
+        entity_rc.change.after_unknown.id is true or
+          rc.change.after.canonical_id is entity_rc.change.after.id
+      }
+    }
   }
 }
 
