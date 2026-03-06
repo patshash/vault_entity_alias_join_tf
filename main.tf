@@ -27,6 +27,11 @@ data "vault_identity_entity" "lookup" {
   depends_on = [vault_identity_entity.example]
 }
 
+# Look up different entity by name to test Sentinel enforcement (uncomment to test)
+data "vault_identity_entity" "fail-lookup" {
+  entity_name = var.entity_name_fail
+}
+
 # 3. Look up the auth backend accessor (needed for the alias)
 data "vault_auth_backend" "example" {
   path = var.auth_backend_path
@@ -37,5 +42,8 @@ data "vault_auth_backend" "example" {
 resource "vault_identity_entity_alias" "example" {
   name           = var.alias_name
   mount_accessor = data.vault_auth_backend.example.accessor
-  canonical_id   = data.vault_identity_entity.lookup.entity_id
+  #canonical_id   = data.vault_identity_entity.lookup.entity_id
+  # Test Sentinel rule with an incorrect canonical_id to show enforcement
+  canonical_id   = data.vault_identity_entity.fail-lookup.entity_id
+
 }
