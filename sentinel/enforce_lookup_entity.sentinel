@@ -56,9 +56,16 @@ validate_alias_canonical_id = rule {
 }
 
 # ---------------------------------------------------------------
-# Guard: the workspace variable must be set
+# Check if there are any create/update changes to validate.
+# During a destroy, both collections are empty so we can skip.
 # ---------------------------------------------------------------
-validate_variable_set = rule {
+has_changes = length(entity_changes) > 0 or length(entity_alias_changes) > 0
+
+# ---------------------------------------------------------------
+# Guard: the workspace variable must be set (only when there are
+# changes that need validation — skipped during destroy)
+# ---------------------------------------------------------------
+validate_variable_set = rule when has_changes {
   allowed_entity_name is not ""
 }
 
