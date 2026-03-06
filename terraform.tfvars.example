@@ -1,0 +1,5 @@
+entity_name      = "my-app-entity"
+entity_policies  = ["default", "my-app-policy"]
+entity_metadata  = { team = "platform", env = "production" }
+auth_backend_path = "userpass"
+alias_name       = "my-app-user"

@@ -1,0 +1,72 @@
+import "tfplan/v2" as tfplan
+import "tfrun"
+
+# ---------------------------------------------------------------
+# Read the allowed entity name from the workspace variable.
+# This is the ONLY entity that this workspace is permitted to modify.
+# ---------------------------------------------------------------
+allowed_entity_name = tfrun.variables["entity_name"].value else ""
+
+# ---------------------------------------------------------------
+# Validate vault_identity_entity resources
+# Ensure every entity being created/updated has the allowed name.
+# ---------------------------------------------------------------
+entity_changes = filter tfplan.resource_changes as _, rc {
+  rc.type is "vault_identity_entity" and
+    rc.mode is "managed" and
+    (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+validate_entity_name = rule {
+  all entity_changes as _, rc {
+    rc.change.after.name is allowed_entity_name
+  }
+}
+
+# ---------------------------------------------------------------
+# Validate vault_identity_entity_alias resources
+# Ensure every alias being created/updated points to the entity
+# that was looked up by name (matching the workspace variable).
+# We cross-reference the alias's canonical_id against the data
+# source that looked up the allowed entity name.
+# ---------------------------------------------------------------
+entity_alias_changes = filter tfplan.resource_changes as _, rc {
+  rc.type is "vault_identity_entity_alias" and
+    rc.mode is "managed" and
+    (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+# Collect entity IDs from the data source lookups in the planned values
+lookup_data_sources = filter tfplan.planned_values.resources as _, r {
+  r.type is "vault_identity_entity" and
+    r.mode is "data"
+}
+
+valid_entity_ids = []
+for lookup_data_sources as _, ds {
+  if ds.values.entity_name is allowed_entity_name {
+    append(valid_entity_ids, ds.values.entity_id)
+  }
+}
+
+validate_alias_canonical_id = rule {
+  all entity_alias_changes as _, rc {
+    rc.change.after.canonical_id in valid_entity_ids
+  }
+}
+
+# ---------------------------------------------------------------
+# Guard: the workspace variable must be set
+# ---------------------------------------------------------------
+validate_variable_set = rule {
+  allowed_entity_name is not ""
+}
+
+# ---------------------------------------------------------------
+# Main policy — all rules must pass
+# ---------------------------------------------------------------
+main = rule {
+  validate_variable_set and
+  validate_entity_name and
+  validate_alias_canonical_id
+}
